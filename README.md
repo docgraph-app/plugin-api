@@ -60,13 +60,19 @@ export default {
   "id": "word-count",          // MUST equal the folder name; ^[a-z0-9][a-z0-9._-]*$
   "name": "Word Count",
   "version": "0.1.0",
-  "main": "main.js",
+  "main": "main.js",           // MUST be exactly "main.js" — the entry filename is fixed
   "permissions": ["vault:read", "ui:panel", "storage", "events"],
   "minAppVersion": "0.1.0",    // optional
   "author": "You",             // optional
   "repo": "you/word-count"     // optional
 }
 ```
+
+`main` is required but **not configurable** — it must be the literal string
+`"main.js"`, and your bundle must be at `<plugin dir>/main.js`. DocGraph imports
+that filename directly (`plugin://localhost/<id>/main.js`), so a manifest naming
+anything else is rejected at load time. Bundle into `main.js` at the plugin
+root; a `dist/` layout won't load.
 
 ## Permissions (advisory but checked)
 

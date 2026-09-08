@@ -155,6 +155,125 @@ export interface VaultApi {
    *  local embedding index; empty when the AI index isn't built. Requires
    *  `vault:read`. (v1.1, additive) */
   semanticEdges(): Promise<SemanticEdge[]>;
+  /**
+   * The typed entity graph (ADR 0121 M4) — files plus, on request, the tags,
+   * people and dates they carry, with every edge labelled by kind.
+   *
+   * `spec.query` seeds the node set from a saved query's rows, so a query and
+   * the graph of its results are the same rows. `spec.include` names entity
+   * kinds beyond files and links; they are OFF by default, because a vault
+   * with thousands of tags renders as a hairball the moment tags become
+   * nodes. A kind that would flood comes back in `omitted` with its count
+   * rather than being partly drawn.
+   *
+   * `linkGraph()` remains the files-and-links view. Requires `vault:read`.
+   * (v1.2, additive)
+   */
+  graph(spec?: GraphSpec): Promise<EntityGraph>;
+  /**
+   * Run a saved query and return its resolved rows — the same rows the app's
+   * own pinned panel and in-page marker show. This is how a plugin reads the
+   * vault's tasks, tags, people, dates, links and page properties without a
+   * reader per kind. `null` when the query id is unknown. Requires
+   * `vault:read`. (v1.2, additive)
+   */
+  query(savedQueryId: string): Promise<QueryRows | null>;
+  /**
+   * Declare a query source of your own. It then behaves like one of the app's
+   * built-in sources: queryable, pinnable as a panel, drawable in the graph
+   * and readable by the AI, with no further work.
+   *
+   * Rows are PUSHED with {@link setSourceRows}, not pulled — the query engine
+   * cannot call back into a plugin. Push whenever your data changes.
+   * Requires `vault:source`. (v1.4, additive)
+   */
+  registerSource(def: SourceDef): Promise<void>;
+  /** Replace a source's rows. Requires `vault:source`. (v1.4, additive) */
+  setSourceRows(sourceId: string, rows: SourceRow[]): Promise<number>;
+}
+
+/** A query source a plugin declares. (v1.4) */
+export interface SourceDef {
+  /** Unique within your plugin. `[a-zA-Z0-9_-]`, max 64 — namespaced as
+   *  `<pluginId>.<id>`, so it cannot collide with a built-in source or another
+   *  plugin's. Declaring a built-in name is refused. */
+  id: string;
+  label: string;
+  /** 1..=32 columns. */
+  columns: SourceColumn[];
+  /** Which column identifies a row; defaults to the first. */
+  display?: string;
+}
+
+export interface SourceColumn {
+  colId: string;
+  name: string;
+  /** Defaults to `text`. An unknown value degrades to `text`. */
+  type?: "text" | "number" | "date" | "boolean";
+}
+
+export interface SourceRow {
+  /** Stable id, so a row keeps its identity across pushes. */
+  id?: string;
+  /** Values by `colId`. Max 4096 bytes each; at most 20,000 rows per push. */
+  cells: Record<string, string>;
+}
+
+/** The resolved result of a saved query. (v1.2) */
+export interface QueryRows {
+  headers: string[];
+  rows: { id: string | null; cells: string[] }[];
+  /** Total before paging. */
+  total: number;
+  grouped: boolean;
+}
+
+/** What slice of the entity graph to build (`vault.graph`). (v1.2) */
+export interface GraphSpec {
+  /** A saved query id whose rows become the nodes; omit for the whole vault. */
+  query?: string;
+  /** Entity kinds to include beyond files and their links. */
+  include?: ("tag" | "person" | "date" | "semantic")[];
+}
+
+/** What a node in the entity graph IS. A `file` node's id is its vault path;
+ *  an entity node's id is namespaced (`tag:work`) so it cannot shadow one. */
+export type GraphNodeKind = "file" | "tag" | "person" | "date";
+
+/** What an edge MEANS — one kind per index projection. */
+export type GraphEdgeKind = "link" | "tag" | "person" | "date" | "semantic";
+
+export interface EntityNode {
+  id: string;
+  kind: GraphNodeKind;
+  label: string;
+  /** Files only; empty for entity nodes. */
+  folder: string;
+  /** Encrypted at rest: a node with no edges by construction, because its
+   *  links were never extracted and keeping old ones would leak
+   *  plaintext-derived metadata. */
+  locked: boolean;
+}
+
+export interface EntityEdge {
+  source: string;
+  target: string;
+  kind: GraphEdgeKind;
+  /** The `<a rel>` value on a `link` edge that carries one. */
+  rel: string | null;
+}
+
+/** An entity kind asked for that would have flooded the view. */
+export interface OmittedKind {
+  kind: GraphNodeKind;
+  count: number;
+}
+
+export interface EntityGraph {
+  nodes: EntityNode[];
+  edges: EntityEdge[];
+  /** Kinds left out with their counts — never a partial layer. */
+  omitted: OmittedKind[];
 }
 
 /** Options for opening a file in the viewer. */
@@ -226,7 +345,24 @@ export type DocGraphEvent =
   | "file:wrote"
   | "link:external"
   | "index:ready"
-  | "index:updated";
+  | "index:updated"
+  /** ADR 0121 M6 — the vault's own data changed. Payload is `undefined`:
+   *  what changed is a matter for a read. (v1.2, additive) */
+  | "tasks:updated"
+  | "queries:updated"
+  | "properties:updated"
+  | "graph:updated"
+  /** The app asks the graph to show ONE saved query's rows. The first event on
+   *  this surface that carries a payload (`GraphFocus | null`); `null` clears
+   *  the focus. (v1.3, additive) */
+  | "graph:focus";
+
+/** Payload of `graph:focus`. (v1.3) */
+export interface GraphFocus {
+  queryId: string;
+  /** The query's name, for the plugin's own "showing X" chrome. */
+  label: string;
+}
 
 export interface EventsApi {
   /** Subscribe to a curated event. Requires `events`. Returns an unsubscribe
@@ -301,6 +437,8 @@ export type Permission =
   | "ui:settings"
   | "storage"
   | "events"
+  /** Declare a query source and push its rows. (v1.4) */
+  | "vault:source"
   | "http:fetch"
   | "ai";
 

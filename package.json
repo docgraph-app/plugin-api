@@ -1,6 +1,6 @@
 {
   "name": "@docgraph/plugin-api",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "Type definitions for authoring DocGraph plugins (ADR 0020). Types only — the runtime `app` object is injected by the host. v1 surface is frozen (see README → Stability).",
   "license": "MIT",
   "types": "index.d.ts",

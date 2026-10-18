@@ -233,15 +233,15 @@ export interface GraphSpec {
   /** A saved query id whose rows become the nodes; omit for the whole vault. */
   query?: string;
   /** Entity kinds to include beyond files and their links. */
-  include?: ("tag" | "person" | "date" | "semantic")[];
+  include?: ("tag" | "person" | "date" | "semantic" | "property")[];
 }
 
 /** What a node in the entity graph IS. A `file` node's id is its vault path;
  *  an entity node's id is namespaced (`tag:work`) so it cannot shadow one. */
-export type GraphNodeKind = "file" | "tag" | "person" | "date";
+export type GraphNodeKind = "file" | "tag" | "person" | "date" | "entity";
 
 /** What an edge MEANS — one kind per index projection. */
-export type GraphEdgeKind = "link" | "tag" | "person" | "date" | "semantic";
+export type GraphEdgeKind = "link" | "tag" | "person" | "date" | "semantic" | "property";
 
 export interface EntityNode {
   id: string;
@@ -312,7 +312,10 @@ export interface CommandsApi {
 export interface EditorSlashContext {
   query: string;
   insertInline: (html: string) => void;
-  /** Not yet supported — throws until block-insert lands (ADR 0022). */
+  /**
+   * Splice a block element as a sibling after the caret's enclosing block
+   * (ADR 0022) — e.g. an `<div data-docgraph-table>` table marker.
+   */
   insertBlock: (html: string) => void;
 }
 
@@ -355,7 +358,17 @@ export type DocGraphEvent =
   /** The app asks the graph to show ONE saved query's rows. The first event on
    *  this surface that carries a payload (`GraphFocus | null`); `null` clears
    *  the focus. (v1.3, additive) */
-  | "graph:focus";
+  | "graph:focus"
+  /** The app asks the graph to show ONE note's neighbourhood (local mode,
+   *  centred on that note). Payload `GraphLocal`, or `null` when malformed.
+   *  (v1.5, additive) */
+  | "graph:local";
+
+/** Payload of `graph:local`. (v1.5) */
+export interface GraphLocal {
+  /** Vault-relative path of the note to centre on. */
+  path: string;
+}
 
 /** Payload of `graph:focus`. (v1.3) */
 export interface GraphFocus {

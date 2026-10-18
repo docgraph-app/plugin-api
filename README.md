@@ -213,7 +213,7 @@ const out = await app.ai.complete("Summarize:\n\n" + hits[0].content, {
 ```
 
 `complete` is a single pass — **no agent loop, no tools, no file writes.** If
-your plugin needs to write notes, declare `vault:write` and use `app.vault.write`
+your plugin needs to edit existing notes, declare `vault:write` and use `app.vault.write`
 visibly; don't route writes through the model. `complete` rejects with a
 human-readable message when AI is disabled in Settings, no model is configured,
 or Ollama is unreachable.
